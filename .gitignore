@@ -1,0 +1,32 @@
+# Data directories
+data/tpch/
+data/lake/
+
+# Catalog database
+catalog/ducklake.ducklake
+catalog/ducklake.ducklake.files/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+uv.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+

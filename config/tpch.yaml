@@ -1,0 +1,13 @@
+# TPCH generation & paths
+scale: 20                  # default; override via env TPCH_SCALE
+parts: 48                  # default; env TPCH_PARTS
+tables: ["orders"]         # default; env TPCH_TABLES (comma sep)
+output_dir: "data/tpch"
+lake_dir: "data/lake"
+catalog_db: "catalog/ducklake.ducklake"
+
+# parquet writer tuning
+parquet:
+  row_group_bytes: 100000000     # ~100MB groups
+  compression: "zstd"              # tpchgen-cli default or pass-through
+
