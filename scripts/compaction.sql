@@ -110,7 +110,10 @@ CALL lake.set_option('per_thread_output', 'false');
 
 -- CALL ducklake_merge_adjacent_files('lake');
 -- Or check your DuckLake version - this function may need different parameters
-CALL ducklake_merge_adjacent_files('lake');
+CALL ducklake_merge_adjacent_files('lake','lineitem');
+
+-- Restore per_thread_output to true
+CALL lake.set_option('per_thread_output', 'true');
 
 SELECT 'Compaction completed!' AS status;
 SELECT 'Note: Old files are not immediately deleted. Now cleaning up old files.' AS note;

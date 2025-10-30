@@ -21,6 +21,15 @@ ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
 -- ============================================================================
+-- Configure DuckLake Options
+-- ============================================================================
+-- These options allow for much faster reads & writes from DuckLake
+CALL lake.set_option('per_thread_output', 'true');
+CALL lake.set_option('parquet_compression', 'zstd');
+CALL lake.set_option('parquet_version', '2');
+CALL lake.set_option('parquet_row_group_size', '983040');
+
+-- ============================================================================
 -- Create Raw Orders Table Schema
 -- ============================================================================
 -- Schema matches TPCH specification exactly (no partition columns)

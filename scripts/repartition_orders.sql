@@ -45,12 +45,6 @@ CREATE OR REPLACE TABLE orders (
 ALTER TABLE orders SET PARTITIONED BY (year, month);
 
 -- ============================================================================
--- Configure DuckLake Options
--- ============================================================================
--- Enable per-thread output for parallel insertion
-CALL lake.set_option('per_thread_output', 'true');
-
--- ============================================================================
 -- Load Data with Partitioning
 -- ============================================================================
 -- Extract date components and copy from orders_raw into partitioned orders table
