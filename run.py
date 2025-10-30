@@ -63,6 +63,8 @@ def execute_sql_file(sql_file, variables=None, conn=None):
                 sql = sql.replace(f"__{key}__", str(value))
     
     # Use provided connection or create a new one
+    # Track whether connection was provided (vs created) to know if we should skip setup statements
+    conn_was_provided = conn is not None
     should_close = False
     if conn is None:
         conn = duckdb.connect()
@@ -91,9 +93,9 @@ def execute_sql_file(sql_file, variables=None, conn=None):
         cleaned_sql = '\n'.join(cleaned_lines)
         raw_statements = cleaned_sql.split(';')
         
-        # If a connection was provided, skip INSTALL/LOAD/ATTACH/USE statements
-        # since they're already done
-        if conn is not None:
+        # Only skip INSTALL/LOAD/ATTACH/USE statements if connection was PROVIDED
+        # (meaning it was already set up). If we just created it, we need to run these.
+        if conn_was_provided:
             filtered_statements = []
             for stmt in raw_statements:
                 stmt_upper = stmt.strip().upper()
@@ -157,8 +159,14 @@ def execute_sql_file(sql_file, variables=None, conn=None):
             except Exception as e:
                 # Some statements might fail (e.g., CREATE TABLE IF NOT EXISTS when table exists)
                 error_msg = str(e)
+                # Don't suppress ATTACH errors - these are critical
+                if "failed to attach" in error_msg.lower() and "no such file or directory" in error_msg.lower():
+                    # This is likely because the directory doesn't exist - but we create it in cmd_catalog
+                    # So this shouldn't happen, but if it does, raise it
+                    print_info(f"Error executing SQL: {error_msg}")
+                    raise
                 # Check if it's a "database not found" error - might need to re-execute USE
-                if "failed to find attached database" in error_msg.lower() or "failed to attach" in error_msg.lower():
+                if "failed to find attached database" in error_msg.lower():
                     # Try to re-execute USE if we're in a context where lake should be available
                     if "lake" in error_msg.lower():
                         try:
@@ -186,7 +194,7 @@ def execute_sql_file(sql_file, variables=None, conn=None):
                             pass
                 
                 if "already exists" not in error_msg.lower() and "does not exist" not in error_msg.lower():
-                    if "failed to find attached database" not in error_msg.lower() and "failed to attach" not in error_msg.lower():
+                    if "failed to find attached database" not in error_msg.lower():
                         print_info(f"Error executing SQL: {error_msg}")
                         raise
     finally:
