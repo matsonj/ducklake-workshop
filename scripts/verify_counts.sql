@@ -20,6 +20,11 @@ USE lake;
 -- ============================================================================
 -- Verify Row Counts
 -- ============================================================================
+-- Counts in raw pq files
+SELECT 'tpch_orders' AS name, COUNT(*) AS rows
+FROM read_parquet('data/tpch/orders/*.parquet');
+
+
 -- Count rows in raw table (zero-copy registered files)
 SELECT 'raw_orders' AS name, COUNT(*) AS rows
 FROM orders_raw;

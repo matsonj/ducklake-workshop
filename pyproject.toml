@@ -2,10 +2,11 @@
 name = "ducklake-tpch"
 version = "0.1.0"
 description = "DuckLake TPCH Demo"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "tpchgen-cli",
     "pyyaml",
     "yq>=3.4.3",
+    "duckdb>=1.4.1"
 ]
 
