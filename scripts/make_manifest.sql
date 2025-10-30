@@ -1,43 +1,77 @@
 -- scripts/make_manifest.sql
--- Demonstrate DuckLake metadata and snapshot capabilities
-INSTALL ducklake; LOAD ducklake;
+-- Purpose: Demonstrate DuckLake metadata capabilities and create snapshots
+-- Usage:   make manifest
+--
+-- Shows how DuckLake stores all metadata in its catalog database (no external
+-- manifest files needed). Demonstrates querying metadata tables directly.
 
--- Attach DuckLake database
+-- ============================================================================
+-- Initialize DuckLake Extension
+-- ============================================================================
+INSTALL ducklake;
+LOAD ducklake;
+
+-- ============================================================================
+-- Attach DuckLake Catalog Database
+-- ============================================================================
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
--- Show current tables in the lake
-SELECT '=== Current Tables ===' as info;
-SELECT name as table_name FROM (SHOW ALL TABLES) WHERE database = 'lake' ORDER BY name;
+-- ============================================================================
+-- Show Current Tables
+-- ============================================================================
+SELECT '=== Current Tables ===' AS info;
+SELECT name AS table_name
+FROM (SHOW ALL TABLES)
+WHERE database = 'lake'
+ORDER BY name;
 
--- Show row counts for each table
-SELECT '=== Table Row Counts ===' as info;
-SELECT 'orders_raw' as table_name, COUNT(*) as row_count FROM orders_raw
+-- ============================================================================
+-- Show Table Row Counts
+-- ============================================================================
+SELECT '=== Table Row Counts ===' AS info;
+SELECT 'orders_raw' AS table_name, COUNT(*) AS row_count
+FROM orders_raw
 UNION ALL
-SELECT 'orders' as table_name, COUNT(*) as row_count FROM orders;
+SELECT 'orders' AS table_name, COUNT(*) AS row_count
+FROM orders;
 
--- Query DuckLake metadata tables directly
--- Note: Metadata tables are in the __ducklake_metadata_lake schema
-SELECT '=== Available Metadata Tables ===' as info;
-SELECT table_name 
-FROM information_schema.tables 
+-- ============================================================================
+-- List Available Metadata Tables
+-- ============================================================================
+-- DuckLake stores metadata in __ducklake_metadata_* schemas
+-- These tables provide direct access to catalog information without external files
+SELECT '=== Available Metadata Tables ===' AS info;
+SELECT table_name
+FROM information_schema.tables
 WHERE table_schema LIKE '%ducklake%' OR table_name LIKE '%ducklake%'
 ORDER BY table_name;
 
--- Query data files metadata
-SELECT '=== Data Files ===' as info;
-SELECT t.table_name, df.path, df.record_count 
+-- ============================================================================
+-- Query Data Files Metadata
+-- ============================================================================
+-- Shows which Parquet files are registered for each table
+SELECT '=== Data Files ===' AS info;
+SELECT
+    t.table_name,
+    df.path,
+    df.record_count
 FROM __ducklake_metadata_lake.ducklake_data_file df
 JOIN __ducklake_metadata_lake.ducklake_table t ON df.table_id = t.table_id
-ORDER BY t.table_name, df.path 
+ORDER BY t.table_name, df.path
 LIMIT 10;
 
--- Query snapshots if any exist
-SELECT '=== Snapshots ===' as info;
-SELECT snapshot_id, snapshot_time 
-FROM __ducklake_metadata_lake.ducklake_snapshot 
-ORDER BY snapshot_id DESC 
+-- ============================================================================
+-- Query Snapshots (Time-Travel Metadata)
+-- ============================================================================
+-- Snapshots enable time-travel queries: SELECT * FROM orders AT (VERSION => 1)
+SELECT '=== Snapshots ===' AS info;
+SELECT
+    snapshot_id,
+    snapshot_time
+FROM __ducklake_metadata_lake.ducklake_snapshot
+ORDER BY snapshot_id DESC
 LIMIT 10;
 
--- Note: All metadata is stored in DuckLake catalog - query directly for file lists, snapshots, etc.
--- See DuckLake documentation for snapshot creation syntax and other metadata tables
+-- Note: All metadata is stored in DuckLake catalog - query directly for file lists,
+-- snapshots, etc. See DuckLake documentation for snapshot creation syntax.

@@ -1,51 +1,76 @@
 #!/bin/bash
 # scripts/preflight.sh
+# Purpose: Verify all prerequisites are installed and configured
+# Usage:   Called automatically by 'make setup'
 set -euo pipefail
 
-need() { 
-  command -v "$1" >/dev/null 2>&1 || { 
-    echo "Missing $1" >&2
-    exit 1
-  }
+# ============================================================================
+# Helper Function: Check if command exists
+# ============================================================================
+need() {
+    command -v "$1" >/dev/null 2>&1 || {
+        echo "Error: Missing required command: $1" >&2
+        echo "Please install $1 and ensure it's in your PATH." >&2
+        exit 1
+    }
 }
 
+# ============================================================================
+# Verify Required Commands
+# ============================================================================
 need duckdb
 need uv
 
-# Set up venv and sync dependencies
+# ============================================================================
+# Set Up Python Virtual Environment
+# ============================================================================
 echo "Setting up Python virtual environment..."
 if [ ! -d .venv ]; then
-  uv venv
+    uv venv
 fi
 uv sync
 
-# Verify tpchgen-cli is available via uv run
+# ============================================================================
+# Verify Python Dependencies
+# ============================================================================
+# Check tpchgen-cli (TPCH data generator)
 echo "Checking tpchgen-cli..."
 uv run tpchgen-cli --version >/dev/null 2>&1 || {
-  echo "Error: tpchgen-cli not available via uv run" >&2
-  exit 1
+    echo "Error: tpchgen-cli not available via uv run" >&2
+    echo "Try running: uv sync" >&2
+    exit 1
 }
 
-# Verify yq is available via uv run
+# Check yq (YAML parser for config file)
 echo "Checking yq..."
 uv run yq --version >/dev/null 2>&1 || {
-  echo "Error: yq not available via uv run" >&2
-  exit 1
+    echo "Error: yq not available via uv run" >&2
+    echo "Try running: uv sync" >&2
+    exit 1
 }
 
-# Verify DuckLake extension is available
+# ============================================================================
+# Verify DuckLake Extension
+# ============================================================================
+# DuckLake requires DuckDB 1.3.0+ to be installed
 echo "Checking DuckLake extension..."
 duckdb -c "INSTALL ducklake; LOAD ducklake; SELECT 'DuckLake extension loaded successfully';" >/dev/null 2>&1 || {
-  echo "Warning: Could not load DuckLake extension. Make sure DuckDB 1.3.0+ is installed." >&2
-  exit 1
+    echo "Warning: Could not load DuckLake extension." >&2
+    echo "Make sure DuckDB 1.3.0+ is installed and in your PATH." >&2
+    exit 1
 }
 
-# 2GB free space check (cheap sanity)
+# ============================================================================
+# Check Available Disk Space
+# ============================================================================
+# TPCH scale 20 with 48 parts requires substantial space
+# This is a cheap sanity check (2GB threshold)
 FREE=$(df -k . | awk 'NR==2{print $4}')
 if [ "$FREE" -lt 2000000 ]; then
-  echo "Not enough disk space (~>2GB required)." >&2
-  exit 1
+    echo "Error: Not enough disk space (~2GB required)." >&2
+    echo "Available: $(($FREE / 1024))MB" >&2
+    exit 1
 fi
 
-echo "Preflight OK."
+echo "Preflight checks passed."
 

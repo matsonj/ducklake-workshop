@@ -1,13 +1,37 @@
-# TPCH generation & paths
-scale: 20                  # default; override via env TPCH_SCALE
-parts: 48                  # default; env TPCH_PARTS
-tables: ["orders"]         # default; env TPCH_TABLES (comma sep)
+# TPCH Generation Configuration
+# Override defaults via environment variables:
+#   TPCH_SCALE=10 make tpch
+#   TPCH_PARTS=24 make tpch
+#   TPCH_TABLES=orders,lineitem make tpch
+
+# Scale factor (default: 1GB per scale factor)
+# Scale 20 = ~20GB of TPCH data
+scale: 20
+
+# Number of parts to split generation into
+# Useful for incremental loading and parallel processing
+parts: 48
+
+# Tables to generate (comma-separated list)
+# Default: just orders table for demo purposes
+tables: ["orders"]
+
+# Output directory for generated Parquet files
 output_dir: "data/tpch"
+
+# Directory where DuckLake will store partitioned Parquet files
 lake_dir: "data/lake"
+
+# DuckLake catalog database location
 catalog_db: "catalog/ducklake.ducklake"
 
-# parquet writer tuning
+# Parquet writer tuning
 parquet:
-  row_group_bytes: 100000000     # ~100MB groups
-  compression: "zstd"              # tpchgen-cli default or pass-through
+  # Row group size in bytes (~100MB default)
+  # Larger groups = better compression but slower queries
+  row_group_bytes: 100000000
+  
+  # Compression algorithm (zstd recommended for good balance)
+  # Options: uncompressed, snappy, gzip, brotli, zstd, lz4
+  compression: "zstd"
 

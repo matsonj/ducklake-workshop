@@ -1,12 +1,28 @@
 -- scripts/repartition_orders.sql
--- Read raw files → write partitioned lake by orderdate using DuckLake
-INSTALL ducklake; LOAD ducklake;
+-- Purpose: Repartition raw TPCH orders data into a Hive-style partitioned layout
+--          Uses DuckLake to create a partitioned table and copy data from orders_raw
+-- Usage:   make repartition
+--
+-- This script reads from the orders_raw table (populated via bootstrap_catalog.sql)
+-- and writes to a partitioned orders table organized by year/month.
 
--- Attach DuckLake database
+-- ============================================================================
+-- Initialize DuckLake Extension
+-- ============================================================================
+INSTALL ducklake;
+LOAD ducklake;
+
+-- ============================================================================
+-- Attach DuckLake Catalog Database
+-- ============================================================================
+-- The catalog database stores all metadata; DATA_PATH specifies where Parquet files reside
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
--- Create partitioned table schema in DuckLake (matching TPCH specification)
+-- ============================================================================
+-- Create Partitioned Table Schema
+-- ============================================================================
+-- Schema matches TPCH specification with additional partition columns (year, month, day)
 CREATE OR REPLACE TABLE orders (
     o_orderkey BIGINT,
     o_custkey BIGINT,
@@ -22,16 +38,23 @@ CREATE OR REPLACE TABLE orders (
     day INTEGER
 );
 
--- Set partitioning using ALTER TABLE (DuckLake syntax)
+-- ============================================================================
+-- Configure Partitioning
+-- ============================================================================
+-- Partition by year and month for Hive-style directory layout: year=YYYY/month=MM/
 ALTER TABLE orders SET PARTITIONED BY (year, month);
 
--- Copy data from raw orders table into partitioned DuckLake table
--- This reads from the orders_raw table (which has files added via ducklake_add_data_files)
+-- ============================================================================
+-- Load Data with Partitioning
+-- ============================================================================
+-- Extract date components and copy from orders_raw into partitioned orders table
+-- ORDER BY ensures data is written in chronological order
 INSERT INTO orders
-SELECT *,
-       year(o_orderdate)  AS year,
-       month(o_orderdate) AS month,
-       day(o_orderdate)   AS day
+SELECT
+    *,
+    year(o_orderdate)  AS year,
+    month(o_orderdate) AS month,
+    day(o_orderdate)   AS day
 FROM orders_raw
 ORDER BY o_orderdate;
 

@@ -1,17 +1,36 @@
+# Makefile for DuckLake TPCH Demo
+# Provides convenient targets for data generation, catalog management, and verification
+
 ENV ?= .env
 
+# ============================================================================
+# Help Target
+# ============================================================================
 .PHONY: help
 help:
-	@echo "Targets:"
-	@echo "  setup           Install Python dependencies (uv) and verify env"
+	@echo "DuckLake TPCH Demo - Available Targets:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  setup           Install Python dependencies (uv) and verify environment"
+	@echo ""
+	@echo "Data Generation:"
 	@echo "  tpch            Generate all parts for TPCH tables"
-	@echo "  tpch-part N=1   Generate only part N (incremental demo)"
-	@echo "  repartition     Repartition orders → Hive layout"
-	@echo "  catalog         Bootstrap thin catalog"
-	@echo "  verify          Show row counts raw vs lake"
+	@echo "  tpch-part N=1   Generate only part N (for incremental demos)"
+	@echo ""
+	@echo "DuckLake Operations:"
+	@echo "  catalog         Initialize DuckLake catalog and register Parquet files"
+	@echo "  repartition      Repartition orders → Hive-style partitioned layout"
 	@echo "  manifest        Create DuckLake snapshot (metadata stored in catalog)"
-	@echo "  clean           Remove data and catalog (DANGER)"
+	@echo ""
+	@echo "Verification:"
+	@echo "  verify          Show row counts (raw vs lake) to verify data integrity"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  clean           Remove all generated data and catalog (DANGER)"
 
+# ============================================================================
+# Setup Targets
+# ============================================================================
 .PHONY: setup
 setup:
 	@echo "Setting up DuckLake TPCH demo..."
@@ -26,6 +45,9 @@ setup:
 	fi
 	@bash scripts/preflight.sh
 
+# ============================================================================
+# Data Generation Targets
+# ============================================================================
 .PHONY: tpch
 tpch:
 	@bash scripts/gen_tpch.sh all
@@ -35,23 +57,32 @@ tpch-part:
 	@test -n "$(N)" || (echo "Usage: make tpch-part N=3"; exit 1)
 	@bash scripts/gen_tpch.sh part $(N)
 
-.PHONY: repartition
-repartition:
-	@duckdb < scripts/repartition_orders.sql
-
+# ============================================================================
+# DuckLake Operation Targets
+# ============================================================================
 .PHONY: catalog
 catalog:
 	@duckdb < scripts/bootstrap_catalog.sql
 
-.PHONY: verify
-verify:
-	@duckdb < scripts/verify_counts.sql
+.PHONY: repartition
+repartition:
+	@duckdb < scripts/repartition_orders.sql
 
 .PHONY: manifest
 manifest:
 	@duckdb < scripts/make_manifest.sql
 	@echo "Snapshot created. Query DuckLake metadata directly - no external manifest files needed!"
 
+# ============================================================================
+# Verification Targets
+# ============================================================================
+.PHONY: verify
+verify:
+	@duckdb < scripts/verify_counts.sql
+
+# ============================================================================
+# Cleanup Targets
+# ============================================================================
 .PHONY: clean
 clean:
 	rm -rf data/tpch data/lake catalog/ducklake.ducklake catalog/ducklake.ducklake.files
