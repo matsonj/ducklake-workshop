@@ -6,12 +6,12 @@ This project demonstrates generating TPCH data, repartitioning it into a partiti
 
 ```bash
 cp .env.example .env            # optional
-make setup
-make tpch                       # or: make tpch-part N=1 (repeat for N)
-make catalog                     # Initialize DuckLake catalog
-make repartition                 # Load data into DuckLake partitioned table
-make verify                      # Verify row counts
-make manifest                    # Create snapshot (metadata in DuckLake)
+uv run python run.py setup
+uv run python run.py tpch                       # or: uv run python run.py tpch --part 1 (repeat for N)
+uv run python run.py catalog                     # Initialize DuckLake catalog
+uv run python run.py repartition                 # Load data into DuckLake partitioned table
+uv run python run.py verify                      # Verify row counts
+uv run python run.py manifest                    # Create snapshot (metadata in DuckLake)
 ```
 
 ## Explore in DuckDB with DuckLake
@@ -51,28 +51,24 @@ ducklake-tpch/
     lake/                       # DuckLake managed partitioned data
       orders/                   # partitioned by year/month/day
   scripts/
-    preflight.sh                # env checks (DuckDB, DuckLake, tpchgen-cli)
-    gen_tpch.sh                 # wrapper around tpchgen-cli (parts / part)
-    repartition_orders.sql      # COPY INTO DuckLake partitioned table
-    bootstrap_catalog.sql       # initialize DuckLake catalog & add files
-    verify_counts.sql           # counts + sanity checks
-    make_manifest.sql           # create DuckLake snapshots (metadata in catalog)
+    *.sql                       # SQL scripts executed by run.py
+  run.py                        # Main Python CLI script (replaces Makefile)
 ```
 
 ## Prerequisites
 
+- **Python 3.9+** - Required for running the Python scripts
 - **uv** (recommended) - Fast Python package installer. Install via:
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
 - **DuckDB** 1.3.0+ (installed and in PATH) - Required for DuckLake extension
-- **Bash** (for scripts)
-- **make** (for running tasks)
 
 Dependencies installed automatically:
-- **tpchgen-cli** (installed via `uv` during `make setup`)
+- **tpchgen-cli** (installed via `uv` during `python run.py setup`)
 - **DuckLake extension** (installed automatically via DuckDB)
-- **yq** (checked during `make setup`, install manually if needed)
+- **yq** (installed via `uv` during setup)
+- **duckdb** Python package (installed via `uv` during setup)
 
 ## Configuration
 
@@ -81,16 +77,23 @@ Edit `config/tpch.yaml` or set environment variables:
 - `TPCH_PARTS`: Number of parts to generate (default: 48)
 - `TPCH_TABLES`: Comma-separated list of tables (default: orders)
 
-## Makefile Targets
+## Available Commands
 
-- `make setup` - Install Python dependencies (via uv) and verify prerequisites including DuckLake extension
-- `make tpch` - Generate all parts for TPCH tables
-- `make tpch-part N=1` - Generate only part N (for incremental demos)
-- `make catalog` - Initialize DuckLake catalog database
-- `make repartition` - Copy data into DuckLake partitioned table
-- `make verify` - Show row counts (raw vs lake)
-- `make manifest` - Create DuckLake snapshot (metadata stored in catalog, no external files)
-- `make clean` - Remove all generated data and catalog
+Run `uv run python run.py --help` for full help, or:
+
+- `uv run python run.py setup` - Install Python dependencies (via uv) and verify prerequisites including DuckLake extension
+- `uv run python run.py tpch` - Generate all parts for TPCH tables
+- `uv run python run.py tpch --part 1` - Generate only part N (for incremental demos)
+- `uv run python run.py catalog` - Initialize DuckLake catalog database
+- `uv run python run.py repartition` - Copy data into DuckLake partitioned table
+- `uv run python run.py verify` - Show row counts (raw vs lake)
+- `uv run python run.py manifest` - Create DuckLake snapshot (metadata stored in catalog, no external files)
+- `uv run python run.py load-small-files [--table lineitem]` - Load Parquet files one at a time to create small files
+- `uv run python run.py compact [--table orders]` - Compact small files to improve query performance
+- `uv run python run.py expire-snapshots [--older-than '7 days'] [--dry-run]` - Expire old snapshots and clean up orphaned files
+- `uv run python run.py change-feed [--table orders]` - Show row-level changes between snapshots
+- `uv run python run.py time-travel` - Demonstrate time travel queries
+- `uv run python run.py clean` - Remove all generated data and catalog
 
 ## DuckLake Catalog
 
@@ -104,7 +107,7 @@ DuckLake manages metadata and provides a lakehouse architecture:
 
 **Zero-Copy File Registration**: The `orders_raw` table uses `ducklake_add_data_files` to register existing Parquet files from `data/tpch/orders/` without duplicating them. DuckLake tracks these files in its metadata, allowing you to query them directly as a table.
 
-**Incremental Loading**: After generating new parts with `make tpch-part N=X`, simply re-run `make catalog` to add the new files. The script is idempotent and safe to re-run.
+**Incremental Loading**: After generating new parts with `uv run python run.py tpch --part X`, simply re-run `uv run python run.py catalog` to add the new files. The script is idempotent and safe to re-run.
 
 Query tables directly:
 ```sql
@@ -142,17 +145,21 @@ GROUP BY table_name;
 
 Run sanity checks:
 ```bash
-make tpch
-make verify          # Should show matching counts
-make repartition
-make verify          # Should still match
-make catalog
-make manifest
+uv run python run.py tpch
+uv run python run.py verify          # Should show matching counts
+uv run python run.py repartition
+uv run python run.py verify          # Should still match
+uv run python run.py catalog
+uv run python run.py manifest
 ```
 
 ## Stretch Ideas
 
-- **Rolling arrival**: Loop `make tpch-part N=k` every 10s to "stream" parts
+- **Rolling arrival**: Loop `uv run python run.py tpch --part k` every 10s to "stream" parts
 - **dbt-duckdb**: Create dbt models that select from `read_parquet` over `catalog.tables`
 - **Polars check**: Script to `scan_parquet` the lake folder and groupby
+
+## Cross-Platform Support
+
+This project uses Python scripts instead of Make/bash for better cross-platform compatibility (Windows, macOS, Linux). All SQL remains in separate `.sql` files for transparency and easy inspection.
 

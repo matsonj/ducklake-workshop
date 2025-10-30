@@ -72,10 +72,10 @@ JOIN __ducklake_metadata_lake.ducklake_snapshot s ON snapshot_ids.to_version = s
 -- __FROM_VERSION__ and __TO_VERSION__ are placeholders that get replaced
 -- Table name (__TABLE__) is replaced by wrapper script with actual table name
 CREATE TEMP TABLE from_snapshot_data AS
-SELECT * FROM __TABLE__ AT (VERSION => __FROM_VERSION__);
+SELECT * FROM lake.__TABLE__ AT (VERSION => __FROM_VERSION__);
 
 CREATE TEMP TABLE to_snapshot_data AS
-SELECT * FROM __TABLE__ AT (VERSION => __TO_VERSION__);
+SELECT * FROM lake.__TABLE__ AT (VERSION => __TO_VERSION__);
 
 -- ============================================================================
 -- Show Insertions (New Rows in TO Version)

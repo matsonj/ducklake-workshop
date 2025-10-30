@@ -31,10 +31,10 @@ ORDER BY name;
 -- ============================================================================
 SELECT '=== Table Row Counts ===' AS info;
 SELECT 'orders_raw' AS table_name, COUNT(*) AS row_count
-FROM orders_raw
+FROM lake.orders_raw
 UNION ALL
 SELECT 'orders' AS table_name, COUNT(*) AS row_count
-FROM orders;
+FROM lake.orders;
 
 -- ============================================================================
 -- List Available Metadata Tables
