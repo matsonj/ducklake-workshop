@@ -18,23 +18,17 @@ ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
 -- ============================================================================
--- Show Current Tables
--- ============================================================================
-SELECT '=== Current Tables ===' AS info;
-SELECT name AS table_name
-FROM (SHOW ALL TABLES)
-WHERE database = 'lake'
-ORDER BY name;
-
--- ============================================================================
 -- Show Table Row Counts
 -- ============================================================================
-SELECT '=== Table Row Counts ===' AS info;
+SELECT '=== Current Table & Row Counts ===' AS info;
 SELECT 'orders_raw' AS table_name, COUNT(*) AS row_count
 FROM lake.orders_raw
 UNION ALL
 SELECT 'orders' AS table_name, COUNT(*) AS row_count
-FROM lake.orders;
+FROM lake.orders
+UNION ALL
+SELECT 'lineitem' AS table_name, COUNT(*) AS row_count
+FROM lake.lineitem;
 
 -- ============================================================================
 -- List Available Metadata Tables

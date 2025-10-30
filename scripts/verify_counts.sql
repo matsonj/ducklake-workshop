@@ -24,7 +24,6 @@ USE lake;
 SELECT 'tpch_orders' AS name, COUNT(*) AS rows
 FROM read_parquet('data/tpch/orders/*.parquet');
 
-
 -- Count rows in raw table (zero-copy registered files)
 SELECT 'raw_orders' AS name, COUNT(*) AS rows
 FROM lake.orders_raw;

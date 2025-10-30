@@ -1,24 +1,174 @@
 # DuckLake TPCH Demo
 
-This project demonstrates generating TPCH data, repartitioning it into a partitioned lakehouse layout using **[DuckLake](https://ducklake.select/docs/stable/)**, a DuckDB extension that provides lakehouse capabilities.
+This project demonstrates generating TPCH data and managing it using **[DuckLake](https://ducklake.select/docs/stable/)**, a DuckDB extension that provides lakehouse capabilities.
 
-## Quick start
+## Quick Start
+
+### Using Makefile (Unix/macOS)
 
 ```bash
-cp .env.example .env            # optional
-uv run python run.py setup
-uv run python run.py tpch                       # or: uv run python run.py tpch --part 1 (repeat for N)
-uv run python run.py catalog                     # Initialize DuckLake catalog
-uv run python run.py repartition                 # Load data into DuckLake partitioned table
-uv run python run.py verify                      # Verify row counts
-uv run python run.py manifest                    # Create snapshot (metadata in DuckLake)
+make catalog              # Initialize DuckLake catalog
+make tpch                 # Generate TPCH data
+make repartition          # Load data into DuckLake partitioned table
+make verify               # Verify row counts
+make manifest             # Create snapshot
 ```
 
-## Explore in DuckDB with DuckLake
+### Using DuckDB CLI Directly (Windows/All Platforms)
+
+```bash
+duckdb -f scripts/bootstrap_catalog.sql
+uv run python generate_data.py
+duckdb -f scripts/repartition_orders.sql
+duckdb -f scripts/verify_counts.sql
+duckdb -f scripts/make_manifest.sql
+```
+
+## Project Structure
+
+```
+ducklake-tpch/
+  config/
+    tpch.yaml                  # Configuration for TPCH generation
+  catalog/
+    ducklake.ducklake           # DuckLake catalog database (contains all metadata)
+    ducklake.ducklake.files/    # DuckLake managed Parquet files
+  data/
+    tpch/                       # Raw TPCH Parquet files (by table)
+      orders/
+      lineitem/
+    lake/                       # DuckLake managed partitioned data
+      orders/                   # Partitioned by year/month/day
+      lineitem/                 # Partitioned by year
+  scripts/
+    *.sql                       # SQL scripts executed via duckdb -f
+  generate_data.py              # TPCH data generation script
+  load_small_files.py           # Load files one at a time script
+  Makefile                      # Convenience wrapper (Unix/macOS)
+```
+
+## Prerequisites
+
+- **DuckDB** 1.4.0+ (installed and in PATH) - Required for DuckLake extension
+- **Python 3.9+** - Required for data generation scripts
+- **uv** (recommended) - Fast Python package installer:
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+
+Dependencies are automatically installed via `uv` when running Python scripts:
+- `tpchgen-cli` - TPCH data generator
+- `pyyaml` - YAML configuration parsing
+- `duckdb` - DuckDB Python package
+
+## Configuration
+
+Edit `config/tpch.yaml` or set environment variables:
+- `TPCH_SCALE`: Scale factor (default: 10)
+- `TPCH_PARTS`: Number of parts to generate (default: 100)
+- `TPCH_TABLES`: Comma-separated list of tables (default: orders,lineitem)
+
+## Available Commands
+
+### Using Makefile (Unix/macOS)
+
+```bash
+make help                  # Show all available commands
+make catalog               # Initialize DuckLake catalog
+make tpch                  # Generate TPCH data
+make repartition           # Repartition orders table
+make verify                # Verify row counts
+make manifest              # Create snapshot
+make compact TABLE=orders  # Compact files (default: lineitem)
+make expire-snapshots OLDER_THAN="7 days"  # Expire old snapshots
+make change-feed           # Show changes between snapshots
+make time-travel           # Demonstrate time travel queries
+make load-small-files TABLE=lineitem  # Load files one at a time
+make clean                 # Remove all generated data
+```
+
+### Using DuckDB CLI Directly (All Platforms)
+
+**Basic Commands:**
+```bash
+# Initialize catalog
+duckdb -f scripts/bootstrap_catalog.sql
+
+# Repartition orders table
+duckdb -f scripts/repartition_orders.sql
+
+# Verify row counts
+duckdb -f scripts/verify_counts.sql
+
+# Create snapshot
+duckdb -f scripts/make_manifest.sql
+
+# Time travel queries
+duckdb -f scripts/time_travel.sql
+```
+
+**Commands with Variables:**
+```bash
+# Compact files (default: lineitem)
+duckdb -f scripts/compaction.sql
+
+# Compact specific table
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+
+# Expire snapshots (default: 1 minute)
+duckdb -f scripts/expire_snapshots.sql
+
+# Expire snapshots older than 7 days
+duckdb -c "SET VARIABLE older_than = INTERVAL '7 days';" -f scripts/expire_snapshots.sql
+
+# Change feed analysis (default: orders, latest two snapshots)
+duckdb -f scripts/change_feed.sql
+
+# Change feed with specific snapshots
+duckdb -c "SET VARIABLE from_version = 5; SET VARIABLE to_version = 6;" -f scripts/change_feed.sql
+```
+
+### Python Scripts (All Platforms)
+
+```bash
+# Generate TPCH data
+uv run python generate_data.py
+
+# Generate specific part
+uv run python generate_data.py --part 1
+
+# Load files one at a time
+uv run python load_small_files.py
+
+# Load files for specific table
+uv run python load_small_files.py --table orders
+```
+
+## DuckDB Variables
+
+SQL files use DuckDB's `SET VARIABLE` and `getvariable()` for parameterization:
+
+```sql
+-- Set variable with default
+SET VARIABLE table_name = 'lineitem';
+
+-- Use variable in query
+SELECT * FROM lake.orders WHERE table_name = getvariable('table_name');
+```
+
+Override variables before executing SQL files:
+```bash
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+```
+
+## Exploring DuckLake
+
+Connect to DuckDB and explore:
 
 ```sql
 -- Load DuckLake extension
-INSTALL ducklake; LOAD ducklake;
+INSTALL ducklake;
+LOAD ducklake;
 
 -- Attach DuckLake database
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
@@ -32,134 +182,63 @@ FROM orders GROUP BY 1,2,3 ORDER BY 1,2,3;
 SELECT * FROM orders AT (VERSION => 1);
 
 -- Query DuckLake metadata directly (no manifest files needed!)
-SELECT data_file FROM lake.data_file WHERE table_name = 'orders';
-SELECT snapshot_id, created_at FROM lake.snapshot ORDER BY snapshot_id DESC;
+SELECT * FROM __ducklake_metadata_lake.ducklake_snapshot;
+SELECT * FROM __ducklake_metadata_lake.ducklake_data_file;
+SELECT * FROM __ducklake_metadata_lake.ducklake_table;
 ```
 
-## Project Structure
+## DuckLake Features Demonstrated
 
-```
-ducklake-tpch/
-  config/
-    tpch.yaml                  # scale, parts, tables, paths
-  catalog/
-    ducklake.ducklake           # DuckLake catalog database (contains all metadata)
-    ducklake.ducklake.files/    # DuckLake managed Parquet files
-  data/
-    tpch/                       # raw tpch parquet (by table)
-      orders/
-    lake/                       # DuckLake managed partitioned data
-      orders/                   # partitioned by year/month/day
-  scripts/
-    *.sql                       # SQL scripts executed by run.py
-  run.py                        # Main Python CLI script (replaces Makefile)
-```
+- **Zero-Copy File Registration**: Uses `ducklake_add_data_files` to register existing Parquet files without copying
+- **Partitioning**: Automatic Hive-style partitioning (`year=YYYY/month=MM/day=DD`)
+- **Snapshots**: Time-travel queries via `CREATE SNAPSHOT` and `AT (VERSION => N)`
+- **Metadata Storage**: All metadata in DuckLake catalog database - no external manifest files
+- **File Compaction**: Merge adjacent files to improve query performance
+- **Change Data Capture**: Identify insertions and deletions between snapshots
+- **Snapshot Expiration**: Clean up old snapshots and orphaned files
 
-## Prerequisites
+## SQL Files
 
-- **Python 3.9+** - Required for running the Python scripts
-- **uv** (recommended) - Fast Python package installer. Install via:
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-- **DuckDB** 1.3.0+ (installed and in PATH) - Required for DuckLake extension
+All SQL files are in `scripts/` and are executable directly:
 
-Dependencies installed automatically:
-- **tpchgen-cli** (installed via `uv` during `python run.py setup`)
-- **DuckLake extension** (installed automatically via DuckDB)
-- **yq** (installed via `uv` during setup)
-- **duckdb** Python package (installed via `uv` during setup)
-
-## Configuration
-
-Edit `config/tpch.yaml` or set environment variables:
-- `TPCH_SCALE`: Scale factor (default: 1)
-- `TPCH_PARTS`: Number of parts to generate (default: 48)
-- `TPCH_TABLES`: Comma-separated list of tables (default: orders)
-
-## Available Commands
-
-Run `uv run python run.py --help` for full help, or:
-
-- `uv run python run.py setup` - Install Python dependencies (via uv) and verify prerequisites including DuckLake extension
-- `uv run python run.py tpch` - Generate all parts for TPCH tables
-- `uv run python run.py tpch --part 1` - Generate only part N (for incremental demos)
-- `uv run python run.py catalog` - Initialize DuckLake catalog database
-- `uv run python run.py repartition` - Copy data into DuckLake partitioned table
-- `uv run python run.py verify` - Show row counts (raw vs lake)
-- `uv run python run.py manifest` - Create DuckLake snapshot (metadata stored in catalog, no external files)
-- `uv run python run.py load-small-files [--table lineitem]` - Load Parquet files one at a time to create small files
-- `uv run python run.py compact [--table orders]` - Compact small files to improve query performance
-- `uv run python run.py expire-snapshots [--older-than '7 days'] [--dry-run]` - Expire old snapshots and clean up orphaned files
-- `uv run python run.py change-feed [--table orders]` - Show row-level changes between snapshots
-- `uv run python run.py time-travel` - Demonstrate time travel queries
-- `uv run python run.py clean` - Remove all generated data and catalog
-
-## DuckLake Catalog
-
-DuckLake manages metadata and provides a lakehouse architecture:
-
-- **Catalog Database**: `catalog/ducklake.ducklake` - Stores table metadata
-- **Data Files**: `catalog/ducklake.ducklake.files/` - Managed Parquet files
-- **Snapshots**: Time-travel queries via `CREATE SNAPSHOT`
-- **Partitioning**: Automatic Hive-style partitioning via `PARTITION BY`
-- **Add Files**: Uses `ducklake_add_data_files` to register existing Parquet files without copying
-
-**Zero-Copy File Registration**: The `orders_raw` table uses `ducklake_add_data_files` to register existing Parquet files from `data/tpch/orders/` without duplicating them. DuckLake tracks these files in its metadata, allowing you to query them directly as a table.
-
-**Incremental Loading**: After generating new parts with `uv run python run.py tpch --part X`, simply re-run `uv run python run.py catalog` to add the new files. The script is idempotent and safe to re-run.
-
-Query tables directly:
-```sql
-ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
-USE lake;
-SELECT * FROM orders WHERE year = 1992;
-SELECT COUNT(*) FROM orders_raw;  -- Queries registered files directly
-```
-
-## Snapshots and Metadata
-
-DuckLake stores all metadata in its catalog database - **no external manifest files needed!**
-
-Create snapshots for time-travel queries:
-```sql
-CREATE SNAPSHOT orders_snapshot;
-SELECT * FROM orders AT (VERSION => 1);
-```
-
-Query DuckLake metadata directly:
-```sql
--- List all files in a table
-SELECT data_file FROM lake.data_file WHERE table_name = 'orders';
-
--- List all snapshots
-SELECT snapshot_id, created_at FROM lake.snapshot ORDER BY snapshot_id DESC;
-
--- Get file statistics
-SELECT table_name, COUNT(*) as file_count, SUM(row_count) as total_rows
-FROM lake.data_file
-GROUP BY table_name;
-```
-
-## Testing
-
-Run sanity checks:
-```bash
-uv run python run.py tpch
-uv run python run.py verify          # Should show matching counts
-uv run python run.py repartition
-uv run python run.py verify          # Should still match
-uv run python run.py catalog
-uv run python run.py manifest
-```
-
-## Stretch Ideas
-
-- **Rolling arrival**: Loop `uv run python run.py tpch --part k` every 10s to "stream" parts
-- **dbt-duckdb**: Create dbt models that select from `read_parquet` over `catalog.tables`
-- **Polars check**: Script to `scan_parquet` the lake folder and groupby
+- `bootstrap_catalog.sql` - Initialize DuckLake catalog and register files
+- `repartition_orders.sql` - Load data into partitioned orders table
+- `verify_counts.sql` - Verify row counts match
+- `make_manifest.sql` - Create snapshot and show metadata
+- `compaction.sql` - Compact small files (uses `table_name` variable)
+- `expire_snapshots.sql` - Expire old snapshots (uses `older_than` variable)
+- `change_feed.sql` - Show changes between snapshots
+- `time_travel.sql` - Demonstrate time travel queries
 
 ## Cross-Platform Support
 
-This project uses Python scripts instead of Make/bash for better cross-platform compatibility (Windows, macOS, Linux). All SQL remains in separate `.sql` files for transparency and easy inspection.
+- **Unix/macOS**: Use `make` commands for convenience
+- **Windows**: Use `duckdb -f scripts/file.sql` directly
+- **All Platforms**: Python scripts work everywhere via `uv run python`
 
+## Troubleshooting
+
+**DuckDB not found:**
+```bash
+# Install DuckDB (macOS)
+brew install duckdb
+
+# Or download from https://duckdb.org/docs/installation/
+```
+
+**DuckLake extension not available:**
+- Ensure DuckDB 1.4.0+ is installed
+- Check extension is installed: `duckdb -c "INSTALL ducklake; LOAD ducklake;"`
+
+**Python dependencies:**
+```bash
+# Install dependencies
+uv sync
+
+# Verify installation
+uv run python generate_data.py --help
+```
+
+## License
+
+MIT
