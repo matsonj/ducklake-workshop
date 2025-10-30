@@ -6,15 +6,15 @@
 
 # Scale factor (default: 1GB per scale factor)
 # Scale 20 = ~20GB of TPCH data
-scale: 256
+scale: 10
 
 # Number of parts to split generation into
 # Useful for incremental loading and parallel processing
-parts: 1000
+parts: 100
 
 # Tables to generate (comma-separated list)
 # Default: just orders table for demo purposes
-tables: ["orders"]
+tables: ["orders","lineitem"]
 
 # Output directory for generated Parquet files
 output_dir: "data/tpch"
