@@ -10,8 +10,7 @@ def main():
     paths_to_remove = [
         "data/tpch",
         "data/lake",
-        "catalog/ducklake.ducklake",
-        "catalog/ducklake.ducklake.files"
+        "catalog/ducklake.ducklake"
     ]
     
     for path_str in paths_to_remove:
