@@ -14,14 +14,19 @@ make verify               # Verify row counts
 make manifest             # Create snapshot
 ```
 
+**Run everything in sequence:**
+```bash
+make run                  # Execute all steps from tpch to clean
+```
+
 ### Using DuckDB CLI Directly (Windows/All Platforms)
 
 ```bash
-duckdb -f scripts/bootstrap_catalog.sql
-uv run python generate_data.py
-duckdb -f scripts/repartition_orders.sql
-duckdb -f scripts/verify_counts.sql
-duckdb -f scripts/make_manifest.sql
+duckdb -f scripts/01_bootstrap_catalog.sql
+uv run python scripts/00_generate_data.py
+duckdb -f scripts/02_repartition_orders.sql
+duckdb -f scripts/03_verify_counts.sql
+duckdb -f scripts/04_make_manifest.sql
 ```
 
 ## Project Structure
@@ -32,7 +37,6 @@ ducklake-tpch/
     tpch.yaml                  # Configuration for TPCH generation
   catalog/
     ducklake.ducklake           # DuckLake catalog database (contains all metadata)
-    ducklake.ducklake.files/    # DuckLake managed Parquet files
   data/
     tpch/                       # Raw TPCH Parquet files (by table)
       orders/
@@ -41,9 +45,17 @@ ducklake-tpch/
       orders/                   # Partitioned by year/month/day
       lineitem/                 # Partitioned by year
   scripts/
-    *.sql                       # SQL scripts executed via duckdb -f
-  generate_data.py              # TPCH data generation script
-  load_small_files.py           # Load files one at a time script
+    00_generate_data.py         # TPCH data generation script
+    01_bootstrap_catalog.sql    # Initialize DuckLake catalog
+    02_repartition_orders.sql   # Load data into partitioned table
+    03_verify_counts.sql        # Verify row counts
+    04_make_manifest.sql        # Create snapshot
+    05_load_small_files.py      # Load files one at a time
+    06_compaction.sql            # Compact files
+    07_time_travel.sql          # Time travel queries
+    08_change_feed.sql          # Change feed analysis
+    09_expire_snapshots.sql     # Expire old snapshots
+    10_clean.py                 # Remove all generated data
   Makefile                      # Convenience wrapper (Unix/macOS)
 ```
 
@@ -74,17 +86,18 @@ Edit `config/tpch.yaml` or set environment variables:
 
 ```bash
 make help                  # Show all available commands
-make catalog               # Initialize DuckLake catalog
 make tpch                  # Generate TPCH data
+make catalog               # Initialize DuckLake catalog
 make repartition           # Repartition orders table
 make verify                # Verify row counts
 make manifest              # Create snapshot
-make compact TABLE=orders  # Compact files (default: lineitem)
-make expire-snapshots OLDER_THAN="7 days"  # Expire old snapshots
-make change-feed           # Show changes between snapshots
+make load-small-files      # Load files one at a time
+make compact               # Compact files (default: lineitem)
 make time-travel           # Demonstrate time travel queries
-make load-small-files TABLE=lineitem  # Load files one at a time
+make change-feed           # Show changes between snapshots
+make expire-snapshots      # Expire old snapshots
 make clean                 # Remove all generated data
+make run                   # Run all steps in sequence
 ```
 
 ### Using DuckDB CLI Directly (All Platforms)
@@ -92,56 +105,59 @@ make clean                 # Remove all generated data
 **Basic Commands:**
 ```bash
 # Initialize catalog
-duckdb -f scripts/bootstrap_catalog.sql
+duckdb -f scripts/01_bootstrap_catalog.sql
 
 # Repartition orders table
-duckdb -f scripts/repartition_orders.sql
+duckdb -f scripts/02_repartition_orders.sql
 
 # Verify row counts
-duckdb -f scripts/verify_counts.sql
+duckdb -f scripts/03_verify_counts.sql
 
 # Create snapshot
-duckdb -f scripts/make_manifest.sql
+duckdb -f scripts/04_make_manifest.sql
 
 # Time travel queries
-duckdb -f scripts/time_travel.sql
+duckdb -f scripts/07_time_travel.sql
 ```
 
 **Commands with Variables:**
 ```bash
 # Compact files (default: lineitem)
-duckdb -f scripts/compaction.sql
+duckdb -f scripts/06_compaction.sql
 
 # Compact specific table
-duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/06_compaction.sql
 
 # Expire snapshots (default: 1 minute)
-duckdb -f scripts/expire_snapshots.sql
+duckdb -f scripts/09_expire_snapshots.sql
 
 # Expire snapshots older than 7 days
-duckdb -c "SET VARIABLE older_than = INTERVAL '7 days';" -f scripts/expire_snapshots.sql
+duckdb -c "SET VARIABLE older_than = INTERVAL '7 days';" -f scripts/09_expire_snapshots.sql
 
 # Change feed analysis (default: orders, latest two snapshots)
-duckdb -f scripts/change_feed.sql
+duckdb -f scripts/08_change_feed.sql
 
 # Change feed with specific snapshots
-duckdb -c "SET VARIABLE from_version = 5; SET VARIABLE to_version = 6;" -f scripts/change_feed.sql
+duckdb -c "SET VARIABLE from_version = 5; SET VARIABLE to_version = 6;" -f scripts/08_change_feed.sql
 ```
 
 ### Python Scripts (All Platforms)
 
 ```bash
 # Generate TPCH data
-uv run python generate_data.py
+uv run python scripts/00_generate_data.py
 
 # Generate specific part
-uv run python generate_data.py --part 1
+uv run python scripts/00_generate_data.py --part 1
 
-# Load files one at a time
-uv run python load_small_files.py
+# Load files one at a time (default: lineitem)
+uv run python scripts/05_load_small_files.py
 
 # Load files for specific table
-uv run python load_small_files.py --table orders
+uv run python scripts/05_load_small_files.py --table orders
+
+# Clean up all generated data
+uv run python scripts/10_clean.py
 ```
 
 ## DuckDB Variables
@@ -158,7 +174,7 @@ SELECT * FROM lake.orders WHERE table_name = getvariable('table_name');
 
 Override variables before executing SQL files:
 ```bash
-duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/06_compaction.sql
 ```
 
 ## Exploring DuckLake
@@ -197,18 +213,26 @@ SELECT * FROM __ducklake_metadata_lake.ducklake_table;
 - **Change Data Capture**: Identify insertions and deletions between snapshots
 - **Snapshot Expiration**: Clean up old snapshots and orphaned files
 
-## SQL Files
+## Scripts
 
-All SQL files are in `scripts/` and are executable directly:
+All scripts are numbered sequentially in `scripts/` directory:
 
-- `bootstrap_catalog.sql` - Initialize DuckLake catalog and register files
-- `repartition_orders.sql` - Load data into partitioned orders table
-- `verify_counts.sql` - Verify row counts match
-- `make_manifest.sql` - Create snapshot and show metadata
-- `compaction.sql` - Compact small files (uses `table_name` variable)
-- `expire_snapshots.sql` - Expire old snapshots (uses `older_than` variable)
-- `change_feed.sql` - Show changes between snapshots
-- `time_travel.sql` - Demonstrate time travel queries
+### Python Scripts
+- `00_generate_data.py` - Generate TPCH data using tpchgen-cli
+- `05_load_small_files.py` - Load Parquet files one at a time to create small files
+- `10_clean.py` - Remove all generated data and catalog
+
+### SQL Scripts
+- `01_bootstrap_catalog.sql` - Initialize DuckLake catalog and register files
+- `02_repartition_orders.sql` - Load data into partitioned orders table
+- `03_verify_counts.sql` - Verify row counts match
+- `04_make_manifest.sql` - Create snapshot and show metadata
+- `06_compaction.sql` - Compact small files (uses `table_name` variable)
+- `07_time_travel.sql` - Demonstrate time travel queries
+- `08_change_feed.sql` - Show changes between snapshots
+- `09_expire_snapshots.sql` - Expire old snapshots (uses `older_than` variable)
+
+All SQL files are executable directly via `duckdb -f scripts/XX_script.sql`
 
 ## Cross-Platform Support
 
@@ -236,7 +260,7 @@ brew install duckdb
 uv sync
 
 # Verify installation
-uv run python generate_data.py --help
+uv run python scripts/00_generate_data.py --help
 ```
 
 ## License
