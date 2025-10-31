@@ -1,6 +1,6 @@
 -- scripts/verify_counts.sql
 -- Purpose: Verify row counts match between raw and partitioned tables
--- Usage:   make verify
+-- Usage:   make verify; duckdb -f scripts/03_verify_counts.sql
 --
 -- Compares row counts to ensure data integrity after repartitioning.
 -- Both tables should have identical row counts if repartitioning succeeded.
@@ -10,10 +10,6 @@
 -- ============================================================================
 INSTALL ducklake;
 LOAD ducklake;
-
--- ============================================================================
--- Attach DuckLake Catalog Database
--- ============================================================================
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 

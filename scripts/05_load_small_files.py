@@ -71,9 +71,6 @@ FROM read_parquet('{str(file_path)}');"""
     
     print(f"\nSuccessfully loaded {len(parquet_files)} files into {table} table")
     print("Each file created a separate DuckLake file, ready for compaction!\n")
-    print("Next steps:")
-    print("  1. Create a snapshot: duckdb -f scripts/make_manifest.sql")
-    print("  2. Compact files: duckdb -c \"SET VARIABLE table_name = 'lineitem';\" -f scripts/compaction.sql")
 
 
 if __name__ == "__main__":

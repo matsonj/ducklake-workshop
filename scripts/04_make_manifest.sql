@@ -1,6 +1,6 @@
 -- scripts/make_manifest.sql
 -- Purpose: Demonstrate DuckLake metadata capabilities and create snapshots
--- Usage:   make manifest
+-- Usage:   make manifest; duckdb -f scripts/04_make_manifest.sql
 --
 -- Shows how DuckLake stores all metadata in its catalog database (no external
 -- manifest files needed). Demonstrates querying metadata tables directly.
@@ -10,10 +10,6 @@
 -- ============================================================================
 INSTALL ducklake;
 LOAD ducklake;
-
--- ============================================================================
--- Attach DuckLake Catalog Database
--- ============================================================================
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 

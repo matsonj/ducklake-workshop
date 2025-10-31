@@ -1,7 +1,7 @@
 -- scripts/repartition_orders.sql
 -- Purpose: Repartition raw TPCH orders data into a Hive-style partitioned layout
 --          Uses DuckLake to create a partitioned table and copy data from orders_raw
--- Usage:   make repartition
+-- Usage:   make repartition; duckdb -f scripts/02_repartition_orders.sql
 --
 -- This script reads from the orders_raw table (populated via bootstrap_catalog.sql)
 -- and writes to a partitioned orders table organized by year/month.
@@ -11,11 +11,6 @@
 -- ============================================================================
 INSTALL ducklake;
 LOAD ducklake;
-
--- ============================================================================
--- Attach DuckLake Catalog Database
--- ============================================================================
--- The catalog database stores all metadata; DATA_PATH specifies where Parquet files reside
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 

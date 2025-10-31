@@ -1,6 +1,6 @@
 -- scripts/compaction.sql
 -- Purpose: Compact small files in DuckLake tables to improve query performance
--- Usage:   make compact [TABLE=orders] [TARGET_SIZE=134217728] [PARTITION_FILTER="year=1992"]
+-- Usage:   make compact; duckdb -f scripts/06_compaction.sql
 --
 -- This script demonstrates:
 -- 1. Showing table file statistics before compaction
@@ -12,10 +12,6 @@
 -- ============================================================================
 INSTALL ducklake;
 LOAD ducklake;
-
--- ============================================================================
--- Attach DuckLake Catalog Database
--- ============================================================================
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
@@ -62,7 +58,8 @@ SELECT '=== Table File Statistics (Before Compaction) ===' AS info;
 CREATE TEMP TABLE before_compaction_stats AS
 SELECT 
     COUNT(*) AS file_count,
-    AVG(file_size_bytes) AS avg_file_size_bytes
+    AVG(file_size_bytes) AS avg_file_size_bytes,
+    SUM(file_size_bytes) AS total_size_bytes
 FROM ducklake_table_info_view
 WHERE table_name = getvariable('table_name');
 
@@ -111,10 +108,11 @@ CALL ducklake_merge_adjacent_files('lake', getvariable('table_name'));
 -- Restore per_thread_output to true
 CALL lake.set_option('per_thread_output', 'true');
 
-SELECT 'Compaction completed!' AS status;
-SELECT 'Note: Old files are not immediately deleted. Now cleaning up old files.' AS note;
+SELECT 'New compacted files created!' AS status;
 
 CALL ducklake_cleanup_old_files('lake',cleanup_all => true);
+
+SELECT 'Old files cleaned up!' AS status;
 
 -- ============================================================================
 -- Show Table Info After Compaction
@@ -169,13 +167,25 @@ LIMIT 10;
 -- Use the captured before_stats, not the refreshed view
 SELECT '=== Compaction Summary ===' AS info;
 WITH after_stats AS (
-    SELECT COUNT(*) AS after_count, AVG(file_size_bytes) AS after_avg
+    SELECT 
+        COUNT(*) AS after_count,
+        AVG(file_size_bytes) AS after_avg,
+        SUM(file_size_bytes) AS after_total_size_bytes
     FROM ducklake_table_info_view
     WHERE table_name = getvariable('table_name')
 )
 SELECT
     'File count reduction:' AS metric,
     CAST((SELECT file_count FROM before_compaction_stats) - (SELECT after_count FROM after_stats) AS VARCHAR) AS value
+FROM after_stats
+SELECT 
+    'Before file size:' AS metric, 
+    CAST((SELECT total_size_bytes FROM before_compaction_stats) AS VARCHAR) AS value
+FROM before_compaction_stats
+UNION ALL
+SELECT 
+    'After file size:' AS metric, 
+    CAST((SELECT after_total_size_bytes FROM after_stats) AS VARCHAR) AS value
 FROM after_stats
 UNION ALL
 SELECT

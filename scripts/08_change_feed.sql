@@ -1,6 +1,6 @@
 -- scripts/change_feed.sql
 -- Purpose: Show row-level changes (insertions/deletions) between snapshots
--- Usage:   make change-feed
+-- Usage:   make change-feed; duckdb -f scripts/08_change_feed.sql
 --
 -- This script demonstrates:
 -- 1. Comparing two snapshots to identify changes
@@ -13,10 +13,6 @@
 -- ============================================================================
 INSTALL ducklake;
 LOAD ducklake;
-
--- ============================================================================
--- Attach DuckLake Catalog Database
--- ============================================================================
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 

@@ -1,6 +1,6 @@
 -- scripts/bootstrap_catalog.sql
 -- Purpose: Initialize DuckLake catalog and register existing Parquet files
--- Usage:   make catalog
+-- Usage:   make catalog; duckdb -f scripts/01_bootstrap_catalog.sql
 --
 -- This script performs zero-copy file registration: it adds existing Parquet files
 -- from data/tpch/orders/ to the DuckLake catalog without duplicating them.

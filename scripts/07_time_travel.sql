@@ -1,6 +1,6 @@
 -- scripts/time_travel.sql
 -- Purpose: Demonstrate DuckLake time travel capabilities (querying tables at specific snapshots)
--- Usage:   make time-travel
+-- Usage:   make time-travel; duckdb -f scripts/07_time_travel.sql
 --
 -- This script demonstrates:
 -- 1. Listing available snapshots
@@ -13,10 +13,6 @@
 -- ============================================================================
 INSTALL ducklake;
 LOAD ducklake;
-
--- ============================================================================
--- Attach DuckLake Catalog Database
--- ============================================================================
 ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
