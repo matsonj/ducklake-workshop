@@ -22,8 +22,8 @@ make run                  # Execute all steps from tpch to clean
 ### Using DuckDB CLI Directly (Windows/All Platforms)
 
 ```bash
-duckdb -f scripts/01_bootstrap_catalog.sql
 uv run python scripts/00_generate_data.py
+duckdb -f scripts/01_bootstrap_catalog.sql
 duckdb -f scripts/02_repartition_orders.sql
 duckdb -f scripts/03_verify_counts.sql
 duckdb -f scripts/04_make_manifest.sql
@@ -62,6 +62,9 @@ ducklake-tpch/
 ## Prerequisites
 
 - **DuckDB** 1.4.0+ (installed and in PATH) - Required for DuckLake extension
+  ```
+  curl https://install.motherduck.com | sh
+  ```
 - **Python 3.9+** - Required for data generation scripts
 - **uv** (recommended) - Fast Python package installer:
   ```bash
@@ -120,27 +123,6 @@ duckdb -f scripts/04_make_manifest.sql
 duckdb -f scripts/07_time_travel.sql
 ```
 
-**Commands with Variables:**
-```bash
-# Compact files (default: lineitem)
-duckdb -f scripts/06_compaction.sql
-
-# Compact specific table
-duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/06_compaction.sql
-
-# Expire snapshots (default: 1 minute)
-duckdb -f scripts/09_expire_snapshots.sql
-
-# Expire snapshots older than 7 days
-duckdb -c "SET VARIABLE older_than = INTERVAL '7 days';" -f scripts/09_expire_snapshots.sql
-
-# Change feed analysis (default: orders, latest two snapshots)
-duckdb -f scripts/08_change_feed.sql
-
-# Change feed with specific snapshots
-duckdb -c "SET VARIABLE from_version = 5; SET VARIABLE to_version = 6;" -f scripts/08_change_feed.sql
-```
-
 ### Python Scripts (All Platforms)
 
 ```bash
@@ -158,23 +140,6 @@ uv run python scripts/05_load_small_files.py --table orders
 
 # Clean up all generated data
 uv run python scripts/10_clean.py
-```
-
-## DuckDB Variables
-
-SQL files use DuckDB's `SET VARIABLE` and `getvariable()` for parameterization:
-
-```sql
--- Set variable with default
-SET VARIABLE table_name = 'lineitem';
-
--- Use variable in query
-SELECT * FROM lake.orders WHERE table_name = getvariable('table_name');
-```
-
-Override variables before executing SQL files:
-```bash
-duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/06_compaction.sql
 ```
 
 ## Exploring DuckLake
@@ -245,7 +210,7 @@ All SQL files are executable directly via `duckdb -f scripts/XX_script.sql`
 **DuckDB not found:**
 ```bash
 # Install DuckDB (macOS)
-brew install duckdb
+curl https://install.motherduck.com | sh
 
 # Or download from https://duckdb.org/docs/installation/
 ```
