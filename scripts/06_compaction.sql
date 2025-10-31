@@ -20,15 +20,11 @@ ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
 USE lake;
 
 -- ============================================================================
--- Configuration (can be overridden via -v flags)
+-- Configuration (use DuckDB variables)
 -- ============================================================================
--- Use variables directly in queries, defaulting if not provided
--- TABLE defaults to 'lineitem', TARGET_SIZE defaults to 134217728 (128MB)
--- Note: DuckDB doesn't support variables in CREATE TABLE, so we use a default
--- The Makefile can pass TABLE via command-line variable substitution if needed
--- Store table name in temp table for use throughout script
-CREATE TEMP TABLE config AS
-SELECT 'lineitem' AS table_name;
+-- Set default table name if not already set
+-- Override via: duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+SET VARIABLE table_name = 'lineitem';
 
 -- ============================================================================
 -- Create Helper View for Table Info (ducklake_table_info compatibility)
@@ -38,7 +34,7 @@ SELECT 'lineitem' AS table_name;
 CREATE TEMP TABLE compaction_context AS
 SELECT table_id AS original_table_id
 FROM __ducklake_metadata_lake.ducklake_table
-WHERE table_name = (SELECT table_name FROM config)
+WHERE table_name = getvariable('table_name')
 ORDER BY table_id DESC
 LIMIT 1;
 
@@ -56,7 +52,7 @@ SELECT
     END AS partition_path
 FROM __ducklake_metadata_lake.ducklake_table t
 JOIN __ducklake_metadata_lake.ducklake_data_file df ON t.table_id = df.table_id
-WHERE t.table_name = (SELECT table_name FROM config)
+WHERE t.table_name = getvariable('table_name')
   AND t.table_id = (SELECT original_table_id FROM compaction_context);
 
 -- ============================================================================
@@ -68,17 +64,17 @@ SELECT
     COUNT(*) AS file_count,
     AVG(file_size_bytes) AS avg_file_size_bytes
 FROM ducklake_table_info_view
-WHERE table_name = (SELECT table_name FROM config);
+WHERE table_name = getvariable('table_name');
 
 SELECT
-    (SELECT table_name FROM config) AS table_name,
+    getvariable('table_name') AS table_name,
     COUNT(*) AS file_count,
     SUM(file_size_bytes) AS total_size_bytes,
     AVG(file_size_bytes) AS avg_file_size_bytes,
     MIN(file_size_bytes) AS min_file_size_bytes,
     MAX(file_size_bytes) AS max_file_size_bytes
 FROM ducklake_table_info_view
-WHERE table_name = (SELECT table_name FROM config);
+WHERE table_name = getvariable('table_name');
 
 -- ============================================================================
 -- Show File Distribution by Partition (if partitioned)
@@ -89,7 +85,7 @@ SELECT
     COUNT(*) AS file_count,
     SUM(file_size_bytes) AS partition_size_bytes
 FROM ducklake_table_info_view
-WHERE table_name = (SELECT table_name FROM config)
+WHERE table_name = getvariable('table_name')
 GROUP BY partition_path
 ORDER BY file_count DESC
 LIMIT 10;
@@ -110,7 +106,7 @@ CALL lake.set_option('per_thread_output', 'false');
 
 -- CALL ducklake_merge_adjacent_files('lake');
 -- Or check your DuckLake version - this function may need different parameters
-CALL ducklake_merge_adjacent_files('lake','lineitem');
+CALL ducklake_merge_adjacent_files('lake', getvariable('table_name'));
 
 -- Restore per_thread_output to true
 CALL lake.set_option('per_thread_output', 'true');
@@ -125,14 +121,14 @@ CALL ducklake_cleanup_old_files('lake',cleanup_all => true);
 -- ============================================================================
 SELECT '=== Table File Statistics (After Compaction) ===' AS info;
 SELECT
-    (SELECT table_name FROM config) AS table_name,
+    getvariable('table_name') AS table_name,
     COUNT(*) AS file_count,
     SUM(file_size_bytes) AS total_size_bytes,
     AVG(file_size_bytes) AS avg_file_size_bytes,
     MIN(file_size_bytes) AS min_file_size_bytes,
     MAX(file_size_bytes) AS max_file_size_bytes
 FROM ducklake_table_info_view
-WHERE table_name = (SELECT table_name FROM config);
+WHERE table_name = getvariable('table_name');
 
 -- ============================================================================
 -- Show Improved File Distribution
@@ -153,7 +149,7 @@ SELECT
     END AS partition_path
 FROM __ducklake_metadata_lake.ducklake_table t
 JOIN __ducklake_metadata_lake.ducklake_data_file df ON t.table_id = df.table_id
-WHERE t.table_name = (SELECT table_name FROM config)
+WHERE t.table_name = getvariable('table_name')
   AND t.table_id = (SELECT original_table_id FROM compaction_context);
 
 SELECT '=== Updated File Distribution ===' AS info;
@@ -162,7 +158,7 @@ SELECT
     COUNT(*) AS file_count,
     SUM(file_size_bytes) AS partition_size_bytes
 FROM ducklake_table_info_view
-WHERE table_name = (SELECT table_name FROM config)
+WHERE table_name = getvariable('table_name')
 GROUP BY partition_path
 ORDER BY file_count DESC
 LIMIT 10;
@@ -175,7 +171,7 @@ SELECT '=== Compaction Summary ===' AS info;
 WITH after_stats AS (
     SELECT COUNT(*) AS after_count, AVG(file_size_bytes) AS after_avg
     FROM ducklake_table_info_view
-    WHERE table_name = (SELECT table_name FROM config)
+    WHERE table_name = getvariable('table_name')
 )
 SELECT
     'File count reduction:' AS metric,

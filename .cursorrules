@@ -1,0 +1,219 @@
+# DuckLake TPCH Workshop - Cursor Rules
+
+## Project Overview
+This is a DuckLake TPCH demo workshop that demonstrates lakehouse capabilities using DuckDB's DuckLake extension. The project uses **DuckDB CLI directly** (`duckdb -f file.sql`) instead of Python wrappers for maximum simplicity.
+
+## Architecture
+
+### Core Components
+- **`Makefile`**: Commands that execute `duckdb -f scripts/*.sql` (Linux/macOS)
+- **`scripts/*.sql`**: SQL scripts executed directly via `duckdb -f`
+- **`generate_data.py`**: Standalone Python script for TPCH data generation
+- **`load_small_files.py`**: Standalone Python script for loading files one at a time
+- **`config/tpch.yaml`**: Configuration file for TPCH generation
+- **`catalog/ducklake.ducklake`**: DuckLake catalog database (metadata storage)
+- **`data/tpch/`**: Raw TPCH Parquet files (source data)
+- **`data/lake/`**: DuckLake-managed partitioned Parquet files
+
+### Key Technologies
+- **DuckDB CLI**: Executes SQL files directly via `duckdb -f file.sql`
+- **DuckLake Extension**: Provides lakehouse capabilities (partitioning, snapshots, time travel)
+- **Python**: Only for data generation (`generate_data.py`) and file loading loops (`load_small_files.py`)
+- **uv**: Python package manager (used for Python scripts)
+- **Makefile**: Convenience wrapper for Unix systems (Windows users use DuckDB CLI directly)
+
+## Core Principles (MANDATORY)
+
+### 1. SQL Files Execute Directly with DuckDB CLI
+**STRICT RULE**: All SQL runs directly via `duckdb -f scripts/file.sql`.
+- ✅ ALWAYS: Use `duckdb -f scripts/file.sql` to execute SQL files
+- ✅ SQL files are self-contained and executable
+- ✅ SQL files use DuckDB variables (`SET VARIABLE` / `getvariable()`) for parameterization
+- ❌ NEVER: Use Python to execute SQL files (except `load_small_files.py` which loops)
+
+### 2. SQL Failures Abort Immediately
+**STRICT RULE**: When SQL fails, DuckDB CLI aborts immediately.
+- ✅ DuckDB CLI exits with non-zero exit code on SQL errors
+- ✅ Makefile uses `set -e` to abort on errors
+- ✅ No error suppression - SQL errors are fatal
+
+### 3. Python Scripts Must Be Caveman Simple
+**STRICT RULE**: Python scripts (`generate_data.py`, `load_small_files.py`) are minimal.
+- ❌ NEVER: Use try/except blocks
+- ❌ NEVER: Use complex if/else conditionals
+- ✅ ALWAYS: Write linear, straightforward code
+- ✅ Python is ONLY for: data generation and file loops - nothing else
+
+### 4. Use DuckDB Variables, Not Python String Replacement
+**STRICT RULE**: SQL files use DuckDB's `SET VARIABLE` and `getvariable()` for parameters.
+- ✅ ALWAYS: Use `SET VARIABLE table_name = 'lineitem';` in SQL files
+- ✅ ALWAYS: Use `getvariable('table_name')` to reference variables
+- ✅ SQL files set defaults, users can override via `SET VARIABLE` before execution
+- ❌ NEVER: Use Python string replacement for SQL parameters (except `load_small_files.py`)
+
+## Critical Patterns & Gotchas
+
+### 1. DuckDB Variable Usage
+**CRITICAL**: Use DuckDB variables for parameterization.
+```sql
+-- Set variable with default
+SET VARIABLE table_name = 'lineitem';
+
+-- Use variable in query
+SELECT * FROM lake.{getvariable('table_name')};
+
+-- Or use in WHERE clause
+WHERE table_name = getvariable('table_name');
+```
+
+**Variable Scopes**:
+- `SET VARIABLE` (SESSION scope) - persists for the SQL file execution
+- Variables can be set before executing SQL file: `duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql`
+
+### 2. SQL File Execution Pattern
+**Standard execution**:
+```bash
+duckdb -f scripts/bootstrap_catalog.sql
+```
+
+**With variable override**:
+```bash
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+```
+
+**Multiple statements**:
+```bash
+duckdb -c "SET VARIABLE older_than = INTERVAL '7 days';" -f scripts/expire_snapshots.sql
+```
+
+### 3. Fully Qualified Table Names
+**IMPORTANT**: Use fully qualified table names (`lake.table_name`) in SQL files.
+- Tables are defined in `bootstrap_catalog.sql` with schema `lake.`
+- SQL files should reference tables as `lake.table_name`
+- This is a SQL authoring best practice
+
+### 4. File Loading Loop (load_small_files.py)
+**ONLY EXCEPTION**: `load_small_files.py` uses Python to loop through files.
+- This script loops through Parquet files and executes INSERT statements
+- Each INSERT gets its own DuckDB connection
+- This is the ONLY place where Python executes SQL statements
+
+## File Structure Conventions
+
+### SQL Files (`scripts/*.sql`)
+- All SQL files go in `scripts/` directory
+- Use fully qualified names: `lake.table_name`
+- Include header comments explaining purpose
+- Use `SET VARIABLE` for configurable parameters with defaults
+- Structure: Comments → Variable Setup → Setup (INSTALL/LOAD/ATTACH/USE) → Main SQL → Cleanup
+
+### Python Scripts
+- **`generate_data.py`**: TPCH data generation (reads `config/tpch.yaml`)
+- **`load_small_files.py`**: Loops through Parquet files and inserts them one at a time
+- Both scripts are standalone and execute via `uv run python script.py`
+
+### Makefile
+- Provides convenience targets for Unix systems
+- Each target executes `duckdb -f scripts/file.sql` or `uv run python script.py`
+- Windows users should use DuckDB CLI directly (commands documented in README)
+
+## DuckLake-Specific Patterns
+
+### Catalog Initialization
+```sql
+INSTALL ducklake;
+LOAD ducklake;
+ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
+USE lake;
+```
+
+### Table Creation
+- Use `CREATE TABLE IF NOT EXISTS lake.table_name` for idempotent creation
+- Use `CREATE OR REPLACE TABLE lake.table_name` when you want to reset
+- Partition columns must be explicitly defined in schema
+- Use `ALTER TABLE lake.table_name SET PARTITIONED BY (col1, col2)` after creation
+
+### Zero-Copy File Registration
+```sql
+CALL ducklake_add_data_files('lake', 'table_name', 'data/tpch/table_name/*.parquet');
+```
+- First arg: database name ('lake')
+- Second arg: table name (just 'table_name', NOT 'lake.table_name')
+- Third arg: glob pattern for files
+
+### Metadata Queries
+- Snapshots: `SELECT * FROM __ducklake_metadata_lake.ducklake_snapshot`
+- Data files: `SELECT * FROM __ducklake_metadata_lake.ducklake_data_file`
+- Tables: `SELECT * FROM __ducklake_metadata_lake.ducklake_table`
+
+## Command Patterns
+
+### Standard SQL Command (Makefile)
+```makefile
+catalog:
+	duckdb -f scripts/bootstrap_catalog.sql
+```
+
+### SQL Command with Variable
+```makefile
+compact:
+	duckdb -c "SET VARIABLE table_name = '$(TABLE)';" -f scripts/compaction.sql
+```
+
+### Python Command (Makefile)
+```makefile
+tpch:
+	uv run python generate_data.py
+```
+
+## Testing Checklist
+When modifying code, verify:
+1. ✅ SQL files execute directly with `duckdb -f scripts/file.sql`
+2. ✅ SQL files use DuckDB variables (`SET VARIABLE` / `getvariable()`) for parameters
+3. ✅ Python scripts are caveman simple (no try/except, minimal if/else)
+4. ✅ Makefile targets execute `duckdb -f` or `uv run python` commands
+5. ✅ Tables use fully qualified names (`lake.table_name`)
+6. ✅ SQL files include all necessary INSTALL/LOAD/ATTACH/USE statements
+7. ✅ Only `load_small_files.py` loops through files - all other SQL is direct execution
+
+## Common Commands
+
+### Using Makefile (Unix/macOS)
+```bash
+make catalog              # Initialize DuckLake catalog
+make tpch                 # Generate TPCH data
+make repartition          # Repartition orders table
+make verify               # Verify row counts
+make manifest             # Create snapshot
+make compact TABLE=orders # Compact files
+make expire-snapshots     # Expire old snapshots
+make change-feed          # Show changes between snapshots
+make time-travel          # Demonstrate time travel queries
+make load-small-files     # Load files one at a time
+```
+
+### Using DuckDB CLI Directly (Windows/All Platforms)
+```bash
+duckdb -f scripts/bootstrap_catalog.sql
+duckdb -f scripts/repartition_orders.sql
+duckdb -f scripts/verify_counts.sql
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/compaction.sql
+```
+
+### Python Scripts (All Platforms)
+```bash
+uv run python generate_data.py
+uv run python load_small_files.py --table lineitem
+```
+
+## Environment Variables
+- `TPCH_SCALE`: Scale factor (default from config)
+- `TPCH_PARTS`: Number of parts (default from config)
+- `TPCH_TABLES`: Comma-separated table list (default from config)
+
+## Notes
+- **DuckDB CLI is the primary interface** - SQL files are self-contained
+- **Makefile is convenience only** - Windows users can use DuckDB CLI directly
+- **Python is minimal** - Only for data generation and file loops
+- **SQL files use DuckDB variables** - No Python string replacement
+- **Cross-platform compatibility** - DuckDB CLI works on all platforms

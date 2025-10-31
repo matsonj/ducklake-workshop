@@ -25,7 +25,7 @@ USE lake;
 -- ============================================================================
 SELECT '=== Current Table State ===' AS info;
 SELECT 'orders' AS table_name, COUNT(*) AS row_count
-FROM orders;
+FROM lake.orders;
 
 -- ============================================================================
 -- List Available Snapshots (Introspection)
@@ -47,12 +47,12 @@ SELECT '=== Time Travel Comparison (Current vs Snapshot 4) ===' AS info;
 SELECT
     'Current' AS version_label,
     COUNT(*) AS row_count
-FROM orders
+FROM lake.orders
 UNION ALL
 SELECT
     'Snapshot 4' AS version_label,
     COUNT(*) AS row_count
-FROM orders AT (VERSION => 4);
+FROM lake.orders AT (VERSION => 4);
 
 -- ============================================================================
 -- Time Travel: Query at Specific Timestamp
@@ -63,7 +63,7 @@ SELECT '=== Time Travel Examples ===' AS info;
 SELECT
     'Current' AS query_type,
     COUNT(*) AS row_count
-FROM orders;
+FROM lake.orders;
 
 -- ============================================================================
 -- Detailed Snapshot Information

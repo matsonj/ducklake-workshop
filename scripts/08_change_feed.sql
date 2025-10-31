@@ -33,49 +33,50 @@ ORDER BY snapshot_id DESC
 LIMIT 10;
 
 -- ============================================================================
--- Get snapshot versions (from wrapper script)
+-- Configuration (use DuckDB variables)
 -- ============================================================================
--- Snapshot IDs are dynamically determined by the wrapper script and embedded as literals
--- __FROM_VERSION__ and __TO_VERSION__ are placeholders that get replaced by the shell script
--- __TABLE__ is replaced with the table name (defaults to lineitem)
+-- Set defaults if not already set
+-- Override via: duckdb -c "SET VARIABLE table_name = 'orders'; SET VARIABLE from_version = 5; SET VARIABLE to_version = 6;" -f scripts/change_feed.sql
+SET VARIABLE table_name = 'orders';
+
+-- Auto-detect snapshot versions if not set
+-- Use latest two snapshots if variables not provided
 CREATE TEMP TABLE snapshot_ids AS
 SELECT 
-    __FROM_VERSION__ AS from_version,
-    __TO_VERSION__ AS to_version;
+    COALESCE(getvariable('from_version'), (SELECT snapshot_id FROM __ducklake_metadata_lake.ducklake_snapshot ORDER BY snapshot_id DESC LIMIT 1 OFFSET 1)) AS from_version,
+    COALESCE(getvariable('to_version'), (SELECT snapshot_id FROM __ducklake_metadata_lake.ducklake_snapshot ORDER BY snapshot_id DESC LIMIT 1)) AS to_version;
 
--- Store table name for use throughout script
-CREATE TEMP TABLE config AS
-SELECT '__TABLE__' AS table_name;
+-- Extract version values into variables for use in AT clause
+SET VARIABLE from_version = (SELECT from_version FROM snapshot_ids);
+SET VARIABLE to_version = (SELECT to_version FROM snapshot_ids);
 
 -- Determine versions to compare
 SELECT '=== Comparing Snapshots ===' AS info;
 SELECT
     'FROM version' AS comparison_type,
-    CAST(from_version AS VARCHAR) AS snapshot_id,
+    CAST(getvariable('from_version') AS VARCHAR) AS snapshot_id,
     s.snapshot_time,
     s.schema_version
-FROM snapshot_ids
-JOIN __ducklake_metadata_lake.ducklake_snapshot s ON snapshot_ids.from_version = s.snapshot_id
+FROM __ducklake_metadata_lake.ducklake_snapshot s
+WHERE s.snapshot_id = getvariable('from_version')
 UNION ALL
 SELECT
     'TO version' AS comparison_type,
-    CAST(to_version AS VARCHAR) AS snapshot_id,
+    CAST(getvariable('to_version') AS VARCHAR) AS snapshot_id,
     s.snapshot_time,
     s.schema_version
-FROM snapshot_ids
-JOIN __ducklake_metadata_lake.ducklake_snapshot s ON snapshot_ids.to_version = s.snapshot_id;
+FROM __ducklake_metadata_lake.ducklake_snapshot s
+WHERE s.snapshot_id = getvariable('to_version');
 
 -- ============================================================================
--- Create temporary tables with snapshot data using the snapshot IDs
--- ============================================================================
--- Snapshot IDs are embedded as literals by the wrapper script
--- __FROM_VERSION__ and __TO_VERSION__ are placeholders that get replaced
--- Table name (__TABLE__) is replaced by wrapper script with actual table name
+-- Create temporary tables with snapshot data
+-- Note: Table name is set via variable, but DuckDB requires explicit table names in FROM
+-- For now, we use 'orders' as default. To use a different table, modify this SQL file
 CREATE TEMP TABLE from_snapshot_data AS
-SELECT * FROM __TABLE__ AT (VERSION => __FROM_VERSION__);
+SELECT * FROM lake.orders AT (VERSION => getvariable('from_version'));
 
 CREATE TEMP TABLE to_snapshot_data AS
-SELECT * FROM __TABLE__ AT (VERSION => __TO_VERSION__);
+SELECT * FROM lake.orders AT (VERSION => getvariable('to_version'));
 
 -- ============================================================================
 -- Show Insertions (New Rows in TO Version)
