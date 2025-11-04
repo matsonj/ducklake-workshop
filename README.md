@@ -2,6 +2,37 @@
 
 This project demonstrates generating TPCH data and managing it using **[DuckLake](https://ducklake.select/docs/stable/)**, a DuckDB extension that provides lakehouse capabilities.
 
+## Prerequisites
+
+- **DuckDB** 1.4.0+ (installed and in PATH) - Required for DuckLake extension
+  ```bash
+  curl https://install.motherduck.com | sh
+  ```
+- **Python 3.9+** - Required for data generation scripts
+- **uv** (recommended) - Fast Python package installer:
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+
+**Windows Users:** After installing `uv` and `duckdb`, ensure both are added to your PATH environment variable so they can be accessed from the command line.
+
+Example using PowerShell (run as Administrator):
+```powershell
+# Add uv to PATH (adjust path if installed elsewhere)
+$env:Path += ";$env:USERPROFILE\.cargo\bin"
+
+# Add duckdb to PATH (adjust path if installed elsewhere)
+$env:Path += ";C:\Program Files\DuckDB"
+
+# Make the changes permanent for current user
+[Environment]::SetEnvironmentVariable("Path", $env:Path, [EnvironmentVariableTarget]::User)
+```
+
+Dependencies are automatically installed via `uv` when running Python scripts:
+- `tpchgen-cli` - TPCH data generator
+- `pyyaml` - YAML configuration parsing
+- `duckdb` - DuckDB Python package
+
 ## Quick Start
 
 ### Using Makefile (Unix/macOS)
@@ -12,6 +43,7 @@ make tpch                 # Generate TPCH data
 make repartition          # Load data into DuckLake partitioned table
 make verify               # Verify row counts
 make manifest             # Create snapshot
+...
 ```
 
 **Run everything in sequence:**
@@ -27,6 +59,7 @@ duckdb -f scripts/01_bootstrap_catalog.sql
 duckdb -f scripts/02_repartition_orders.sql
 duckdb -f scripts/03_verify_counts.sql
 duckdb -f scripts/04_make_manifest.sql
+...
 ```
 
 ## Project Structure
@@ -58,30 +91,6 @@ ducklake-tpch/
     10_clean.py                 # Remove all generated data
   Makefile                      # Convenience wrapper (Unix/macOS)
 ```
-
-## Prerequisites
-
-- **DuckDB** 1.4.0+ (installed and in PATH) - Required for DuckLake extension
-  ```
-  curl https://install.motherduck.com | sh
-  ```
-- **Python 3.9+** - Required for data generation scripts
-- **uv** (recommended) - Fast Python package installer:
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-
-Dependencies are automatically installed via `uv` when running Python scripts:
-- `tpchgen-cli` - TPCH data generator
-- `pyyaml` - YAML configuration parsing
-- `duckdb` - DuckDB Python package
-
-## Configuration
-
-Edit `config/tpch.yaml` or set environment variables:
-- `TPCH_SCALE`: Scale factor (default: 10)
-- `TPCH_PARTS`: Number of parts to generate (default: 100)
-- `TPCH_TABLES`: Comma-separated list of tables (default: orders,lineitem)
 
 ## Available Commands
 
@@ -121,6 +130,21 @@ duckdb -f scripts/04_make_manifest.sql
 
 # Time travel queries
 duckdb -f scripts/07_time_travel.sql
+
+# Change feed analysis
+duckdb -f scripts/08_change_feed.sql
+
+# Compact files (default: lineitem)
+duckdb -f scripts/06_compaction.sql
+
+# Compact specific table
+duckdb -c "SET VARIABLE table_name = 'orders';" -f scripts/06_compaction.sql
+
+# Expire snapshots (default: 1 minute)
+duckdb -f scripts/09_expire_snapshots.sql
+
+# Expire snapshots older than 7 days
+duckdb -c "SET VARIABLE older_than = INTERVAL '7 days';" -f scripts/09_expire_snapshots.sql
 ```
 
 ### Python Scripts (All Platforms)
@@ -144,29 +168,26 @@ uv run python scripts/10_clean.py
 
 ## Exploring DuckLake
 
-Connect to DuckDB and explore:
+Connect to DuckDB and explore DuckLake features:
 
-```sql
--- Load DuckLake extension
-INSTALL ducklake;
-LOAD ducklake;
+```bash
+# Initialize catalog and explore metadata
+duckdb -f scripts/01_bootstrap_catalog.sql
 
--- Attach DuckLake database
-ATTACH 'ducklake:catalog/ducklake.ducklake' AS lake (DATA_PATH 'data/lake/');
-USE lake;
+# Query partitioned orders table
+duckdb -f scripts/03_verify_counts.sql
 
--- Query partitioned orders table
-SELECT year, month, day, COUNT(*) AS rows
-FROM orders GROUP BY 1,2,3 ORDER BY 1,2,3;
+# Time travel queries
+duckdb -f scripts/07_time_travel.sql
 
--- Time travel: query at a specific snapshot
-SELECT * FROM orders AT (VERSION => 1);
+# Change feed analysis
+duckdb -f scripts/08_change_feed.sql
 
--- Query DuckLake metadata directly (no manifest files needed!)
-SELECT * FROM __ducklake_metadata_lake.ducklake_snapshot;
-SELECT * FROM __ducklake_metadata_lake.ducklake_data_file;
-SELECT * FROM __ducklake_metadata_lake.ducklake_table;
+# Explore snapshots and metadata
+duckdb -f scripts/04_make_manifest.sql
 ```
+
+All SQL scripts connect to the DuckLake catalog automatically. The metadata tables (`__ducklake_metadata_lake.ducklake_snapshot`, `__ducklake_metadata_lake.ducklake_data_file`, etc.) are accessible within each script.
 
 ## DuckLake Features Demonstrated
 
@@ -205,6 +226,13 @@ All SQL files are executable directly via `duckdb -f scripts/XX_script.sql`
 - **Windows**: Use `duckdb -f scripts/file.sql` directly
 - **All Platforms**: Python scripts work everywhere via `uv run python`
 
+## Configuration (Optional)
+
+Edit `config/tpch.yaml` or set environment variables:
+- `TPCH_SCALE`: Scale factor (default: 10)
+- `TPCH_PARTS`: Number of parts to generate (default: 100)
+- `TPCH_TABLES`: Comma-separated list of tables (default: orders,lineitem)
+
 ## Troubleshooting
 
 **DuckDB not found:**
@@ -227,7 +255,3 @@ uv sync
 # Verify installation
 uv run python scripts/00_generate_data.py --help
 ```
-
-## License
-
-MIT
