@@ -40,8 +40,8 @@ Dependencies are automatically installed via `uv` when running Python scripts:
 ### Using Makefile (Unix/macOS)
 
 ```bash
+make tpch                 # Generate TPCH data - MUST DO THIS FIRST!
 make catalog              # Initialize DuckLake catalog
-make tpch                 # Generate TPCH data
 make repartition          # Load data into DuckLake partitioned table
 make verify               # Verify row counts
 make manifest             # Create snapshot
