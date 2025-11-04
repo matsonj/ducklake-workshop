@@ -14,7 +14,9 @@ This project demonstrates generating TPCH data and managing it using **[DuckLake
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
 
-**Windows Users:** After installing `uv` and `duckdb`, ensure both are added to your PATH environment variable so they can be accessed from the command line.
+**Windows Users:** You will need to install `uv` per [the uv install page](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_2) with PowerShell and then DuckDB from [the DuckDB install page](https://duckdb.org/install/?platform=windows&environment=cli) into `C:\Program Files\DuckDB`.
+
+After installing `uv` and `duckdb`, ensure both are added to your PATH environment variable so they can be accessed from the command line.
 
 Example using PowerShell (run as Administrator):
 ```powershell
