@@ -178,6 +178,7 @@ SELECT
     'File count reduction:' AS metric,
     CAST((SELECT file_count FROM before_compaction_stats) - (SELECT after_count FROM after_stats) AS VARCHAR) AS value
 FROM after_stats
+UNION ALL
 SELECT 
     'Before file size:' AS metric, 
     CAST((SELECT total_size_bytes FROM before_compaction_stats) AS VARCHAR) AS value

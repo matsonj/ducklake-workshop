@@ -18,21 +18,16 @@ USE lake;
 -- ============================================================================
 -- Counts in raw pq files
 SELECT 'tpch_orders' AS name, COUNT(*) AS rows
-FROM read_parquet('data/tpch/orders/*.parquet');
-
--- Count rows in raw table (zero-copy registered files)
+FROM read_parquet('data/tpch/orders/*.parquet')
+union all
 SELECT 'raw_orders' AS name, COUNT(*) AS rows
-FROM lake.orders_raw;
-
--- Count rows in partitioned table (loaded via repartition step)
+FROM lake.orders_raw
+union all
 SELECT 'lake_orders' AS name, COUNT(*) AS rows
-FROM lake.orders;
-
--- Counts in raw lineitem pq files
+FROM lake.orders
+union all
 SELECT 'tpch_lineitem' AS name, COUNT(*) AS rows
-FROM read_parquet('data/tpch/lineitem/*.parquet');
-
--- Count rows in partitioned lineitem table (if it exists)
+FROM read_parquet('data/tpch/lineitem/*.parquet')
+union all
 SELECT 'lake_lineitem' AS name, COUNT(*) AS rows
 FROM lake.lineitem;
-

@@ -27,7 +27,6 @@ USE lake;
 CALL lake.set_option('per_thread_output', 'true');
 CALL lake.set_option('parquet_compression', 'zstd');
 CALL lake.set_option('parquet_version', '2');
-CALL lake.set_option('parquet_row_group_size', '983040');
 
 -- ============================================================================
 -- Create Raw Orders Table Schema

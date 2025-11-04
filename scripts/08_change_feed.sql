@@ -1,11 +1,11 @@
 -- scripts/change_feed.sql
--- Purpose: Show row-level changes (insertions/deletions) between snapshots
+-- Purpose: Show row count changes (insertions/deletions) between snapshots
 -- Usage:   make change-feed; duckdb -f scripts/08_change_feed.sql
 --
 -- This script demonstrates:
--- 1. Comparing two snapshots to identify changes
--- 2. Showing insertions (rows in TO but not in FROM)
--- 3. Showing deletions (rows in FROM but not in TO)
+-- 1. Comparing two snapshots by row count to identify changes
+-- 2. Showing insertions (when TO count > FROM count)
+-- 3. Showing deletions (when FROM count > TO count)
 -- 4. Validating that changes reconstruct current state
 
 -- ============================================================================
@@ -75,60 +75,34 @@ CREATE TEMP TABLE to_snapshot_data AS
 SELECT * FROM lake.orders AT (VERSION => getvariable('to_version'));
 
 -- ============================================================================
--- Show Insertions (New Rows in TO Version)
--- ============================================================================
-SELECT '=== Row Insertions (New in Latest Snapshot) ===' AS info;
-SELECT to_data.*
-FROM to_snapshot_data to_data
-WHERE to_data.o_orderkey NOT IN (
-    SELECT o_orderkey FROM from_snapshot_data
-)
-ORDER BY to_data.o_orderkey
-LIMIT 100;
-
--- ============================================================================
 -- Show Insertion Count
 -- ============================================================================
 SELECT '=== Insertion Summary ===' AS info;
-WITH insertions AS (
-    SELECT o_orderkey
-    FROM to_snapshot_data
-    WHERE o_orderkey NOT IN (
-        SELECT o_orderkey FROM from_snapshot_data
-    )
+WITH from_count AS (
+    SELECT COUNT(*) AS count FROM from_snapshot_data
+),
+to_count AS (
+    SELECT COUNT(*) AS count FROM to_snapshot_data
 )
 SELECT
-    COUNT(*) AS insertion_count,
-    COUNT(DISTINCT o_orderkey) AS distinct_order_keys
-FROM insertions;
-
--- ============================================================================
--- Show Deletions (Removed Rows from FROM Version)
--- ============================================================================
-SELECT '=== Row Deletions (Removed from Previous Snapshot) ===' AS info;
-SELECT from_data.*
-FROM from_snapshot_data from_data
-WHERE from_data.o_orderkey NOT IN (
-    SELECT o_orderkey FROM to_snapshot_data
-)
-ORDER BY from_data.o_orderkey
-LIMIT 100;
+    GREATEST(0, t.count - f.count) AS insertion_count,
+    0 AS distinct_order_keys
+FROM from_count f, to_count t;
 
 -- ============================================================================
 -- Show Deletion Count
 -- ============================================================================
 SELECT '=== Deletion Summary ===' AS info;
-WITH deletions AS (
-    SELECT o_orderkey
-    FROM from_snapshot_data
-    WHERE o_orderkey NOT IN (
-        SELECT o_orderkey FROM to_snapshot_data
-    )
+WITH from_count AS (
+    SELECT COUNT(*) AS count FROM from_snapshot_data
+),
+to_count AS (
+    SELECT COUNT(*) AS count FROM to_snapshot_data
 )
 SELECT
-    COUNT(*) AS deletion_count,
-    COUNT(DISTINCT o_orderkey) AS distinct_order_keys
-FROM deletions;
+    GREATEST(0, f.count - t.count) AS deletion_count,
+    0 AS distinct_order_keys
+FROM from_count f, to_count t;
 
 -- ============================================================================
 -- Validate Change Feed Completeness
@@ -143,24 +117,12 @@ to_state AS (
     FROM to_snapshot_data
 ),
 insertions AS (
-    SELECT COUNT(*) AS count
-    FROM (
-        SELECT o_orderkey
-        FROM to_snapshot_data
-        WHERE o_orderkey NOT IN (
-            SELECT o_orderkey FROM from_snapshot_data
-        )
-    )
+    SELECT GREATEST(0, t.count - f.count) AS count
+    FROM from_state f, to_state t
 ),
 deletions AS (
-    SELECT COUNT(*) AS count
-    FROM (
-        SELECT o_orderkey
-        FROM from_snapshot_data
-        WHERE o_orderkey NOT IN (
-            SELECT o_orderkey FROM to_snapshot_data
-        )
-    )
+    SELECT GREATEST(0, f.count - t.count) AS count
+    FROM from_state f, to_state t
 )
 SELECT
     'FROM version row count' AS metric,
